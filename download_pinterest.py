@@ -17,35 +17,62 @@ def find_num_pins(body):
             num_elements = int(span.text.split(" ")[0])
     return num_elements
 
+def find_board_name(board_url):
+    name_idx = -1
+    if board_url[-1] == "/":
+        name_idx = -2
+    return board_url.split("/")[name_idx]
+
 def find_all_visible_low_res(body):
     low_res_imgs = body.find_elements(By.XPATH, "//a[@href]")
     low_res_imgs = [link.get_attribute("href") for link in low_res_imgs]
     low_res_imgs = [link for link in low_res_imgs if "/pin/" in link]
     return low_res_imgs
 
+def download_board(high_res_sources, download_folder):
+    os.makedirs(download_folder, exist_ok=True)
+    num_downloads = len(high_res_sources)
+    for i, source in enumerate(high_res_sources):
+        if i % 10 == 0:
+            print("Downloading files {} - {}".format(i, min(i + 10, num_downloads)))
+        extension = source.split(".")[-1]
+        urllib.request.urlretrieve(source, os.path.join(download_folder, f"pin_{num_downloads - i}.{extension}"))
 
 class PinterestDownloader(object):
 
-    def __init__(browser_type="chrome"):
+    def __init__(self, browser_type="chrome"):
         self.browser = None
         if "chrome" in browser_type:
-            self.browser(webdriver.Chrome())
+            self.browser = webdriver.Chrome()
 
-    def load_board(self, board_url):
+    def load_board(self, board_url, download_folder):
         self.browser.get(board_url)
         sleep(1) # Let the page load bad style
 
         body = self.browser.find_element_by_tag_name("body")
-        num_pins = find_num_pins(body)
+        board_name = find_board_name(board_url)
+        num_pins = 5#find_num_pins(body)
+        _download_folder = os.path.join(download_folder, board_name)
+        print(f"Will download {num_pins} pins from {board_name} to {_download_folder}")
 
-        low_res_srcs = find_all_visible_low_res()
+        low_res_srcs = find_all_visible_low_res(body)
         while len(low_res_srcs) < num_pins:
             self.scroll_down(times=7)
-            low_res_srcs = find_all_low_res()
+            low_res_srcs = find_all_visible_low_res(body)
 
         if len(low_res_srcs) > num_pins:
             print("Found more links than pins, will probably download some random images.")
 
+        high_res_sources = [self.extract_high_res(low_res_link) for low_res_link in low_res_srcs[:num_pins]]
+        download_board(high_res_sources, _download_folder)
+
+    def extract_high_res(self, low_res_link):
+        self.browser.get(low_res_link)
+        sleep(0.5) # Change to proper wait
+        img = self.browser.find_element_by_tag_name("img")
+        high_res_source = img.get_attribute("src")
+        print(high_res_source)
+        return high_res_source
 
     def scroll_down(self, times, sleep_time=0.5):
         scroll_js = "let height = document.body.scrollHeight; window.scrollTo(0, height);"
@@ -55,7 +82,7 @@ class PinterestDownloader(object):
 
 
 dl = PinterestDownloader()
-dl.load_board("https://www.pinterest.de/VeithOrFlight/images-of-my-mind/")
+dl.load_board("https://www.pinterest.de/VeithOrFlight/images-of-my-mind/", "/tmp")
 
 def old_way():
     cmd_args = sys.argv
@@ -69,9 +96,3 @@ def old_way():
     with open(input_file, 'r') as f:
         sources = f.read()
         sources = sources.split(",")
-
-        for i, src in enumerate(sources[2:]):
-            if i % 10 == 0:
-                print("Downloading files {} - {}".format(i, i + 10))
-            extension = src.split(".")[-1]
-            urllib.request.urlretrieve (src, os.path.join(download_folder, f"img_{i}.{extension}"))
