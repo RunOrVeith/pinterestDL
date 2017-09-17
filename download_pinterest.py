@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import sys
 import os
+from math import ceil
 from time import sleep
 import urllib.request
 from selenium import webdriver
@@ -8,35 +9,50 @@ from selenium.webdriver.common.keys import Keys
 import selenium.webdriver.support.ui as ui
 from selenium.webdriver.common.by import By
 
+def find_num_pins(body):
+    spans = body.find_elements_by_tag_name("span")
+    num_elements = 0
+    for span in spans:
+        if "Pins" in span.text:
+            num_elements = int(span.text.split(" ")[0])
+    return num_elements
+
+def find_all_visible_low_res(body):
+    low_res_imgs = body.find_elements(By.XPATH, "//a[@href]")
+    low_res_imgs = [link.get_attribute("href") for link in low_res_imgs]
+    low_res_imgs = [link for link in low_res_imgs if "/pin/" in link]
+    return low_res_imgs
+
+
 class PinterestDownloader(object):
 
+    def __init__(browser_type="chrome"):
+        self.browser = None
+        if "chrome" in browser_type:
+            self.browser(webdriver.Chrome())
+
     def load_board(self, board_url):
-        browser = webdriver.Chrome()
-        browser.get(board_url)
-        sleep(1) # Let the page load
+        self.browser.get(board_url)
+        sleep(1) # Let the page load bad style
 
-        body = browser.find_element_by_tag_name("body")
+        body = self.browser.find_element_by_tag_name("body")
+        num_pins = find_num_pins(body)
 
-        spans = body.find_elements_by_tag_name("span")
-        num_scrolls = 0
-        for span in spans:
-            if "Pins" in span.text:
-                num_scrolls = int(span.text.split(" ")[0])
-        #self._scroll_down(body, num_scrolls // 10)
-        while len(browser.find_elements(By.XPATH, "//a[starts-with(@href, '/pin/')]")) < num_scrolls:
-            self._scroll_down(body, 1)
-        print("Done scrolling")
-        low_res_imgs = browser.find_elements(By.XPATH, "//a[starts-with(@class, 'pinLink')]")
-        low_res_sources = []
-        for low_res_img in low_res_imgs:
-            print(low_res_img.get_attribute("href"))
-        print(low_res_sources)
+        low_res_srcs = find_all_visible_low_res()
+        while len(low_res_srcs) < num_pins:
+            self.scroll_down(times=7)
+            low_res_srcs = find_all_low_res()
+
+        if len(low_res_srcs) > num_pins:
+            print("Found more links than pins, will probably download some random images.")
 
 
-    def _scroll_down(self, element, nr_scrolls, wait_between_scrolls=0.1):
-        for _ in range(nr_scrolls):
-            element.send_keys(Keys.PAGE_DOWN)
-            sleep(wait_between_scrolls)
+    def scroll_down(self, times, sleep_time=0.5):
+        scroll_js = "let height = document.body.scrollHeight; window.scrollTo(0, height);"
+        for _ in range(times):
+            self.browser.execute_script(scroll_js)
+            sleep(sleep_time)
+
 
 dl = PinterestDownloader()
 dl.load_board("https://www.pinterest.de/VeithOrFlight/images-of-my-mind/")
