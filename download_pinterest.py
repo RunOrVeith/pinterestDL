@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import sys
 import os
+import argparse
 from math import ceil
 from time import sleep
 import urllib.request
@@ -96,18 +97,26 @@ class PinterestDownloader(object):
             sleep(sleep_time)
 
 
-dl = PinterestDownloader()
-dl.load_board("https://www.pinterest.de/VeithOrFlight/images-of-my-mind/", "/tmp", 5)
+def parse_cmd():
+    parser = argparse.ArgumentParser(description='Download a pinterest board or tag page.')
+    parser.add_argument("link", required=True, dest="link", help="Link to the pinterest page you want to download.")
+    parser.add_argument("destination_folder", required=True, dest="dest_folder", help="Folder into which the board will be downloaded.")
+    parser.add_argument("-n", "--name", default=None, required=False, dest="board_name",
+                        help="The name for the folder the board is downloaded in. If not given, will try to extract board name from pinterest.")
+    parser.add_argument("-c", "--count", default=None, required=False, dest="num_pins",
+                        help="Download only the first 'c' pins found on the page.")
+    args = parser.parse_args()
 
-def old_way():
-    cmd_args = sys.argv
-    input_file = cmd_args[1]
-    download_folder = cmd_args[2]
-    if not os.path.isdir(download_folder):
-        raise ValueError("The folder you provided does not exist: {}".format(download_folder))
-    if not os.path.isfile(input_file):
-        raise ValueError("The file you provided does not exist {}".format(input_file))
+    if not os.path.isdir(args.dest_folder):
+        raise ValueError("The folder you provided does not exist: {}".format(args.dest_folder))
+    if args.board_name is not None:
+        if os.path.basename(args.dest_folder) == args.board_name:
+            args.dest_folder = os.path.dirname(args.dest_folder)
 
-    with open(input_file, 'r') as f:
-        sources = f.read()
-        sources = sources.split(",")
+    return args
+
+if __name__ == "__main__":
+    arguments = parse_cmd()
+    dl = PinterestDownloader()
+    dl.load_board(link=arguments.link, dest_folder=arguments.dest_folder,
+                  num_pins=arguments.num_pins, board_name=arguments.board_name)
