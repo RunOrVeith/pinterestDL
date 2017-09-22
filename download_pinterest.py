@@ -20,18 +20,26 @@ DEBUG = True
 
 def find_num_pins(body):
     spans = body.find_elements_by_tag_name("span")
-    num_elements = 0
+    num_elements = float("inf")  # If we download from a tag page, return as many as possible
     for span in spans:
         if "Pins" in span.text:
             num_elements = int(span.text.split(" ")[0])
             break
+
     return num_elements
 
 def find_board_name(board_url):
-    name_idx = -1
-    if board_url[-1] == "/":
-        name_idx = -2
-    return board_url.split("/")[name_idx]
+    if "?q=" in board_url:
+        # We're downloading a tag page, find the search tags in the url
+        name_start = board_url.index("=") + 1
+        name_end = board_url.index("&")
+        return board_url[name_start:name_end]
+    else:
+        # We're downloading a board, extract the title
+        name_idx = -1
+        if board_url[-1] == "/":
+            name_idx = -2
+        return board_url.split("/")[name_idx]
 
 def find_high_res_links(body):
     soup = BeautifulSoup(body.get_attribute("outerHTML"), "html.parser")
@@ -74,21 +82,25 @@ def get_size_verifier(min_x, min_y, mode):
 
 class PinterestDownloader(object):
 
-    def __init__(self, browser_type="chrome", num_threads=4, size_compare_mode=None):
+    def __init__(self, browser_type="chrome", num_threads=4,
+                 min_resolution="0x0",size_compare_mode=None):
         self.browser = None
         if "chrome" in browser_type:
             self.browser = webdriver.Chrome()
         else:
             raise ValueError("Unsupported browser type")
         self.num_threads = num_threads
-        self.size_compare_mode = size_compare_mode
+        # Pick a minimal image resolution
+        min_x, min_y = [int(r) for r in min_resolution.split("x")]
+        self.size_verifier = get_size_verifier(min_x, min_y, size_compare_mode)
 
     def load_board(self, board_url, download_folder,
-                   min_resolution, board_name=None, num_pins=None,
+                   board_name=None, num_pins=None,
                    skip_tolerance=float('inf')):
-        self.browser.get(board_url)
 
+        self.browser.get(board_url)
         body = self.browser.find_element_by_tag_name("body")
+
         if board_name is None:
             board_name = find_board_name(board_url)
 
@@ -115,9 +127,6 @@ class PinterestDownloader(object):
 
         print(f"Will download {num_pins} pins from {board_name} to {download_folder}")
 
-        # Pick a minimal image resolution
-        min_x, min_y = [int(r) for r in min_resolution.split("x")]
-        size_verifier = get_size_verifier(min_x, min_y, self.size_compare_mode)
 
         # Extract sources of images and download the found ones in parallel
         # Pinterest loads further images with JS, so selenium needs to scroll
@@ -137,7 +146,7 @@ class PinterestDownloader(object):
                         future = consumers.submit(download_high_res,
                                                   high_res_source=high_res_link,
                                                   download_folder=download_folder,
-                                                  verify_size=size_verifier)
+                                                  verify_size=self.size_verifier)
                     else:
                         num_skipped += 1
                     for fut in concurrent.futures.as_completed(future_to_url):
@@ -161,7 +170,6 @@ class PinterestDownloader(object):
                 for source in downloaded_this_time:
                     f.write(f"{source}\n")
 
-
     def scroll_down(self, times, sleep_time=0.5):
         scroll_js = "let height = document.body.scrollHeight; window.scrollTo(0, height);"
         for _ in range(times):
@@ -181,7 +189,7 @@ def parse_cmd():
                         help="Number of threads that download images in parallel.")
     parser.add_argument("-r", "--resolution", default="0x0", required=False, dest="min_resolution",
                         help="Minimal resolution to download an image. Both dimension must be bigger than the given dimensions. \
-                              Input as widthxheight. NOT IMPLEMENTED YET.")
+                              Input as widthxheight.")
     parser.add_argument("-m", "--mode", default="individual", required=False, choices=["individual", "area"], dest="mode",
                         help="Pick how the resolution limit is treated: \
                         'individual': Both image dimensions must be bigger than the given resolution. \
@@ -195,7 +203,8 @@ def parse_cmd():
 
 if __name__ == "__main__":
     arguments = parse_cmd()
-    dl = PinterestDownloader(num_threads=arguments.nr_threads, size_compare_mode=arguments.mode)
+    dl = PinterestDownloader(num_threads=arguments.nr_threads,
+                            min_resolution=arguments.min_resolution,
+                            size_compare_mode=arguments.mode)
     dl.load_board(board_url=arguments.link, download_folder=arguments.dest_folder,
-                  num_pins=arguments.num_pins, board_name=arguments.board_name,
-                  min_resolution=arguments.min_resolution)
+                  num_pins=arguments.num_pins, board_name=arguments.board_name)
