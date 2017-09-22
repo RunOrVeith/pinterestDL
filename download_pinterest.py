@@ -1,17 +1,19 @@
 #! /usr/bin/env python
-import sys
+
 import os
 import argparse
 from math import ceil
 import threading
 import concurrent.futures
-from time import sleep
 import urllib.request
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 import selenium.webdriver.support.ui as ui
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
+from datetime import datetime
+from time import sleep
+
 DEBUG = True
 
 
@@ -22,6 +24,7 @@ def find_num_pins(body):
     for span in spans:
         if "Pins" in span.text:
             num_elements = int(span.text.split(" ")[0])
+            break
     return num_elements
 
 def find_board_name(board_url):
@@ -30,35 +33,38 @@ def find_board_name(board_url):
         name_idx = -2
     return board_url.split("/")[name_idx]
 
-def find_all_visible_low_res(body):
-    low_res_imgs = body.find_elements(By.XPATH, "//a[@href]")
-    low_res_imgs = [link.get_attribute("href") for link in low_res_imgs]
-    low_res_imgs = [link for link in low_res_imgs if "/pin/" in link]
-    return low_res_imgs, len(low_res_imgs)
 
-def download_high_res(high_res_source, img_id, download_folder):
-    extension = high_res_source.split(".")[-1]
-    print(f"Going to download {high_res_source} to {download_folder}")
+def find_high_res_links(body):
+    soup = BeautifulSoup(body.get_attribute("outerHTML"), "html.parser")
+    low_res_imgs = soup.find_all("img")
+    return [img["src"] for img in low_res_imgs], len(low_res_imgs)
+
+
+def download_high_res(high_res_source, download_folder):
+    title = high_res_source.split("--")[-1]
+    if not title:
+        extension = high_res_source.split(".")[-1]
+        title = str(datetime.now()) + f".{extension}"
     try:
-        urllib.request.urlretrieve(high_res_source, os.path.join(download_folder, f"pin_{img_id}.{extension}"))
+        urllib.request.urlretrieve(high_res_source, os.path.join(download_folder, title))
     except urllib.request.ContentTooShortError:
-        print(f"Connection died during download of Pin {img_id}.")
+        print(f"Connection died during download of Pin {title}.")
 
 
 class PinterestDownloader(object):
 
-    def __init__(self, browser_type="chrome"):
+    def __init__(self, browser_type="chrome", num_threads=4):
         self.browser = None
         if "chrome" in browser_type:
             self.browser = webdriver.Chrome()
         else:
             raise ValueError("Unsupported browser type")
+        self.num_threads = num_threads
 
     def load_board(self, board_url, download_folder,
                    num_pins=None, board_name=None, min_resolution=None,
                    skip_tolerance=float('inf')):
         self.browser.get(board_url)
-        #sleep(1) # Let the page load bad style
 
         body = self.browser.find_element_by_tag_name("body")
         if board_name is None:
@@ -79,7 +85,7 @@ class PinterestDownloader(object):
         # Check if we can find a file that tells us what we have already downloaded
         memory_file_name = os.path.join(download_folder, f".memory_{board_name}")
         if os.path.isfile(memory_file_name):
-            print("Found a file with content that was previously downloaded.")
+            print(f"Found a file with content that was previously downloaded: {memory_file_name}.")
             with open(memory_file_name, 'r') as f:
                 previously_downloaded = [line.strip() for line in f.readlines()]
         else:
@@ -90,36 +96,38 @@ class PinterestDownloader(object):
 
         print(f"Will download {num_pins} pins from {board_name} to {download_folder}")
 
+        # Extract sources of images and download the found ones in parallel
+        # Pinterest loads further images with JS, so selenium needs to scroll
+        # down to load more images
+        num_srcs = 0
+        num_skipped = 0
         downloaded_this_time = []
-        with concurrent.futures.ThreadPoolExecutor(3) as consumers:
-            num_srcs = 0
-            num_skipped = 0
-            nr_previously_downloaded = len(previously_downloaded)
-
+        nr_previously_downloaded = len(previously_downloaded)
+        with concurrent.futures.ThreadPoolExecutor(self.num_threads) as consumers:
             while len(downloaded_this_time) < num_pins and num_skipped < skip_tolerance:
-                low_res_srcs, new_num_srcs = find_all_visible_low_res(body)
-                end_idx = -1 if num_pins > new_num_srcs else num_pins
-                # Submit the newly found pins to the download queue
-                for i, low_res_link in enumerate(low_res_srcs[num_srcs:end_idx]):
-                    if low_res_link not in previously_downloaded:
-                        print(f"Submitting {low_res_link}")
-                        future = consumers.submit(extract_high_res, low_res_link, i + nr_previously_downloaded, download_folder)
-                        downloaded_this_time.append(low_res_link)
+                high_res_srcs, new_num_srcs = find_high_res_links(body)
+                # Submit only the newly found pins to the download queue
+                end_idx = -1 if num_pins > new_num_srcs else num_pins + 1
+                for i, high_res_link in enumerate(high_res_srcs[num_srcs:end_idx]):
+                    if high_res_link not in previously_downloaded:
+                        future = consumers.submit(download_high_res, high_res_link, download_folder)
+                        downloaded_this_time.append(high_res_link)
                     else:
-                        print("Skipped")
                         num_skipped += 1
 
+                # Scroll down if we have not downloaded enough images yet
                 num_srcs = new_num_srcs
                 if num_srcs < num_pins:
-                    print(f"Scrolling, because {nr_srcs} < {num_pins}")
+                    print(f"Need to scroll down")
                     self.scroll_down(times=7)
+                    body = self.browser.find_element_by_tag_name("body")
 
-
+        self.browser.close()
+        # Write the downloaded images to the memory file.
         if not DEBUG:
             with open(memory_file_name, 'w+') as f:
                 for source in downloaded_this_time:
                     f.write(f"{source}\n")
-
 
 
     def scroll_down(self, times, sleep_time=0.5):
@@ -127,19 +135,6 @@ class PinterestDownloader(object):
         for _ in range(times):
             self.browser.execute_script(scroll_js)
             sleep(sleep_time)
-
-def extract_high_res(low_res_link, img_id, download_folder):
-    print("extract high res")
-    fp = urllib.request.urlopen(low_res_link)
-    html = fp.read().decode("utf8")
-    fp.close()
-    soup = BeautifulSoup(html, "html.parser")
-    high_res_source = soup.find("img")["src"]
-    print(high_res_source)
-    download_high_res(high_res_source, img_id, download_folder)
-    return high_res_source
-
-
 
 
 def parse_cmd():
@@ -150,8 +145,11 @@ def parse_cmd():
                         help="The name for the folder the board is downloaded in. If not given, will try to extract board name from pinterest.")
     parser.add_argument("-c", "--count", default=None, type=int, required=False, dest="num_pins",
                         help="Download only the first 'c' pins found on the page.")
+    parser.add_argument("-j", "--threads", default=4, type=int, required=False, dest="nr_threads",
+                        help="Number of threads that download images in parallel.")
     parser.add_argument("-r", "--resolution", default="0x0", required=False, dest="min_resolution",
-                        help="Minimal resolution to download an image. Both dimension must be bigger than the given dimensions. Input as widthxheight.")
+                        help="Minimal resolution to download an image. Both dimension must be bigger than the given dimensions. \
+                              Input as widthxheight. NOT IMPLEMENTED YET.")
     args = parser.parse_args()
 
     if not os.path.isdir(args.dest_folder):
@@ -161,7 +159,7 @@ def parse_cmd():
 
 if __name__ == "__main__":
     arguments = parse_cmd()
-    dl = PinterestDownloader()
+    dl = PinterestDownloader(num_threads=arguments.nr_threads)
     dl.load_board(board_url=arguments.link, download_folder=arguments.dest_folder,
                   num_pins=arguments.num_pins, board_name=arguments.board_name,
                   min_resolution=arguments.min_resolution)
