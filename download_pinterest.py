@@ -1,22 +1,19 @@
 #! /usr/bin/env python
 
-import sys
-import os
-import signal
-import argparse
-from math import ceil
-import threading
 import concurrent.futures
-import urllib.request
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-import selenium.webdriver.support.ui as ui
-from selenium.webdriver.common.by import By
-from bs4 import BeautifulSoup
 from datetime import datetime
+import os
+import sys
+import signal
 from time import sleep
+
+import argparse
+from bs4 import BeautifulSoup
 from PIL import Image
-from stateful_ordered_set import *
+from selenium import webdriver
+import urllib.request
+
+from memory_set import MemorySet
 
 def find_num_pins(body):
     spans = body.find_elements_by_tag_name("span")
