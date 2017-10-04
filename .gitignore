@@ -1,2 +1,3 @@
 pinvenv/
 __pycache__/
+ghostdriver*

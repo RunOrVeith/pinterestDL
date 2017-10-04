@@ -3,8 +3,9 @@
 import concurrent.futures
 from datetime import datetime
 import os
-import sys
+from shutil import which
 import signal
+import sys
 from time import sleep
 
 import argparse
@@ -15,6 +16,7 @@ import urllib.request
 
 from memory_set import MemorySet
 
+"""Use this script to download pinterest pages or boards. Requires python >= 3.6 and selenium chrome driver in $PATH."""
 
 def find_num_pins(body):
     """
@@ -194,13 +196,12 @@ class Downloader(object):
 
 class PinterestDownloader(object):
 
-    def __init__(self, browser_type="chrome", num_threads=4,
+    def __init__(self, num_threads=4,
                  min_resolution="0x0",size_compare_mode=None):
         """
         Downloader for pinterest boards or tag pages.
         This will open a selenium instance for scrolling.
 
-        :param browser_type: The driver for selenium. Only "chrome" is supported for now.
         :param num_threads: Number of threads to download images with at the same time.
         :param min_resolution: The minimal resolution an image must have to be downloaded and kept.
                Format: XxY.
@@ -208,7 +209,7 @@ class PinterestDownloader(object):
                One of 'area' or 'individual'.
         """
         self.browser = None
-        self.browser_type = browser_type
+        self.browser_type = "phantomjs"  # Only support phantomjs for now, but can easily be extended
 
         self.num_threads = num_threads
         # Pick a minimal image resolution
@@ -219,10 +220,14 @@ class PinterestDownloader(object):
         """
         Use this class with a with-statement as it needs to open a selenium instance.
         """
-        if "chrome" == self.browser_type:
-            self.browser = webdriver.Chrome()
+        if "phantomjs" == self.browser_type.lower():
+            if which("phantomjs") is None:
+                raise EnvironmentError("""No executable for PhantomJS found. Please install PhantomJS and make sure it's visible on the system.""")
+            self.browser = webdriver.PhantomJS()
+            # Set a fake window size for phantomJS, see https://github.com/ariya/phantomjs/issues/11637
+            self.browser.set_window_size(1120, 550)
         else:
-            raise ValueError("Unsupported browser type.")
+            raise ValueError("Unsupported browser type. Only phantomjs is supported right now.")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -302,8 +307,8 @@ class PinterestDownloader(object):
 
         if num_skipped >= skip_tolerance:
             print("Skip limit reached. Stopping.")
-        print(f"Downloaded {downloaded_this_time} pins to {download_folder}. \
-              Skipped {num_skipped} pins.")
+        print(f"""Downloaded {downloaded_this_time} pins to {download_folder}.
+              Skipped {num_skipped} pins.""")
 
     def update_body_html(self):
         """
@@ -346,31 +351,27 @@ def parse_cmd():
 
     :returns a namespace populated with the arguments supplied (or default arguments, if given).
     """
-    parser = argparse.ArgumentParser(description='Download a pinterest board or tag page. When downloading a tag page, \
-    and no maximal number of downloads is provided, stop the script with CTRL+C.')
+    parser = argparse.ArgumentParser(description="""Download a pinterest board or tag page. When downloading a tag page,
+    and no maximal number of downloads is provided, stop the script with CTRL+C.""")
     # Required arguments
     parser.add_argument(dest="link", help="Link to the pinterest page you want to download.")
     parser.add_argument(dest="dest_folder",
-                        help="Folder into which the board will be downloaded.\
-                              Folder with board name is automatically created or found, if it already exists.")
+                        help="""Folder into which the board will be downloaded. Folder with board name is automatically created or found, if it already exists.""")
     # Optional arguments
     parser.add_argument("-n", "--name", default=None, required=False, dest="board_name",
                         help="The name for the folder the board is downloaded in. If not given, will try to extract board name from pinterest.")
     parser.add_argument("-c", "--count", default=None, type=int, required=False, dest="num_pins",
-                        help="Download only the first 'c' pins found on the page. If bigger than the number of pins on the board, \
-                             all pins in the board will be downloaded. The default is to download all pins.")
+                        help="""Download only the first 'c' pins found on the page. If bigger than the number of pins on the board, all pins in the board will be downloaded. The default is to download all pins.""")
     parser.add_argument("-j", "--threads", default=4, type=int, required=False, dest="nr_threads",
                         help="Number of threads that download images in parallel.")
     parser.add_argument("-r", "--resolution", default="0x0", required=False, dest="min_resolution",
-                        help="Minimal resolution to download an image. Both dimension must be bigger than the given dimensions. \
-                              Input as widthxheight.")
+                        help="""Minimal resolution to download an image. Both dimension must be bigger than the given dimensions. Input as widthxheight.""")
     parser.add_argument("-m", "--mode", default="individual", required=False, choices=["individual", "area"], dest="mode",
-                        help="Pick how the resolution limit is treated: \
-                             'individual': Both image dimensions must be bigger than the given resolution. \
-                             'area': The area of the image must be bigger than the provided resolution.")
+                        help="""Pick how the resolution limit is treated:
+                             'individual': Both image dimensions must be bigger than the given resolution.
+                             'area': The area of the image must be bigger than the provided resolution.""")
     parser.add_argument("-s" "--skip-limit", default=float("inf"), type=int, required=False, dest="skip_limit",
-                        help="Abort the download after so many pins have been skipped. A pin is skipped if it was already present in \
-                              the download folder.")
+                        help="""Abort the download after so many pins have been skipped. A pin is skipped if it was already present in the download folder.""")
     args = parser.parse_args()
 
     return args
