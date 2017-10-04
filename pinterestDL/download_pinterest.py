@@ -193,7 +193,6 @@ class Downloader(object):
         return status_report
 
 
-
 class PinterestDownloader(object):
 
     def __init__(self, num_threads=4,
@@ -281,7 +280,7 @@ class PinterestDownloader(object):
                     print(f"Stopped, no new pins found. Skipped {num_skipped} pins.")
                     break
                 else:
-                    print("Found some pins")
+                    print("Found some pins.")
 
                 future_to_url = {}
                 for high_res_link in url_cache:

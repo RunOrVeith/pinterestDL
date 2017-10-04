@@ -11,7 +11,9 @@ class MemorySet(list):
         """
         Start iteration at the last index that was not iterated trough last time.
         """
-        return iter(self[self.last_len:])
+        iterator = iter(self[self.last_len:])
+        self.last_len = len(self)
+        return iterator
 
     def update(self, more_entries):
         """
@@ -27,6 +29,5 @@ class MemorySet(list):
         if len(additions) == 0:
             return False
         else:
-            self.last_len = len(self)
             self.extend(additions)
             return True
