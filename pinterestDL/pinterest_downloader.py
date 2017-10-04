@@ -8,6 +8,7 @@ import sys
 from time import sleep
 
 from bs4 import BeautifulSoup
+import logging
 from PIL import Image
 from selenium import webdriver
 import urllib.request
@@ -15,6 +16,7 @@ import urllib.request
 from memory_set import MemorySet
 
 """Use this script to download pinterest pages or boards. Requires python >= 3.6 and selenium chrome driver in $PATH."""
+
 
 def find_num_pins(body):
     """
@@ -28,6 +30,7 @@ def find_num_pins(body):
             num_elements = int(span.text.split(" ")[0])
             break
 
+    logging.debug(f"Found the provided page to contain {num_elements} pins.")
     return num_elements
 
 
@@ -36,17 +39,21 @@ def find_board_name(board_url):
     :param board_url: The url of a pinterest page.
     :returns the name of that page. If it is a board, that is the name of the board, otherwise the list of tags used.
     """
+    board_name = f"Unknown-{datetime.now()}"
     if "?q=" in board_url:
         # We're downloading a tag page, find the search tags in the url
         name_start = board_url.index("=") + 1
         name_end = board_url.index("&")
-        return board_url[name_start:name_end]
+        board_name = board_url[name_start:name_end]
     else:
         # We're downloading a board, extract the title
         name_idx = -1
         if board_url[-1] == "/":
             name_idx = -2
-        return board_url.split("/")[name_idx]
+        board_name = board_url.split("/")[name_idx]
+
+    logging.debug(f"Found the provided page to have name {board_name}.")
+    return board_name
 
 
 def find_high_res_links(body):
@@ -127,8 +134,11 @@ def _handle_download_report(future, url):
     if not download_report["downloaded"]:
         reason = download_report["reason"]
         downloaded = False
+
         if reason == "err_timeout":
-            print(f"Could not download {url}: {reason}")
+            logging.warning(f"Could not download {url}: {reason}")
+        else:
+            logging.debug(f"Could not download {url}: {reason}")
 
     return downloaded
 
@@ -193,7 +203,7 @@ class Downloader(object):
 
 class PinterestDownloader(object):
 
-    def __init__(self, num_threads=4,
+    def __init__(self, page_timeout=10, num_threads=4,
                  min_resolution="0x0",size_compare_mode=None):
         """
         Downloader for pinterest boards or tag pages.
@@ -207,7 +217,7 @@ class PinterestDownloader(object):
         """
         self.browser = None
         self.browser_type = "phantomjs"  # Only support phantomjs for now, but can easily be extended
-
+        self.page_timeout = page_timeout
         self.num_threads = num_threads
         # Pick a minimal image resolution
         min_x, min_y = [int(r) for r in min_resolution.split("x")]
@@ -225,6 +235,8 @@ class PinterestDownloader(object):
             self.browser.set_window_size(1120, 550)
         else:
             raise ValueError("Unsupported browser type. Only phantomjs is supported right now.")
+
+        self.browser.set_page_load_timeout(self.page_timeout)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -232,6 +244,10 @@ class PinterestDownloader(object):
         Close the selenium instance.
         """
         self.browser.close()
+        if os.path.isfile("ghostdriver.log"):
+            # Remove the log from phantomJS
+            logging.debug("Removing ghostdriver.log (PhantomJS log).")
+            os.remove("ghostdriver.log")
 
     def download_board(self, board_url, download_folder,
                    board_name=None, num_pins=None,
@@ -259,7 +275,6 @@ class PinterestDownloader(object):
                                                                    num_pins=num_pins,
                                                                    body=body)
 
-
         num_srcs = 0
         num_skipped = 0
         downloaded_this_time = 0
@@ -268,17 +283,17 @@ class PinterestDownloader(object):
 
         # Extract sources of images and download the found ones in parallel
         with concurrent.futures.ThreadPoolExecutor(self.num_threads) as consumers:
-            print("Starting download...")
+            logging.info("Starting download...")
 
             while downloaded_this_time < num_pins and num_skipped < skip_tolerance:
 
                 high_res_srcs, new_num_srcs = find_high_res_links(body)
                 retrieved_new_urls = url_cache.update(high_res_srcs)
                 if not retrieved_new_urls:
-                    print(f"Stopped, no new pins found. Skipped {num_skipped} pins.")
+                    logging.info(f"Stopped, no new pins found. Skipped {num_skipped} pins.")
                     break
-                else:
-                    print("Found some pins.")
+
+                logging.info(f"Completed {downloaded_this_time/num_pins}%")
 
                 future_to_url = {}
                 for high_res_link in url_cache:
@@ -299,13 +314,12 @@ class PinterestDownloader(object):
                 # Pinterest loads further images with JS, so selenium needs to scroll down to load more images
                 num_srcs = new_num_srcs
                 if num_srcs < num_pins:
-                    print(f"Need to scroll down because {num_srcs} < {num_pins}")
+                    logging.debug("Need to scroll down because {num_srcs} < {num_pins}")
                     body =  self.scroll_down_for_new_body(times=7)
 
         if num_skipped >= skip_tolerance:
-            print("Skip limit reached. Stopping.")
-        print(f"""Downloaded {downloaded_this_time} pins to {download_folder}.
-              Skipped {num_skipped} pins.""")
+            logging.debug("Skip limit reached. Stopping.")
+        logging.info(f"""Downloaded {downloaded_this_time} pins to {download_folder}. Skipped {num_skipped} pins. Finished.""")
 
     def update_body_html(self):
         """

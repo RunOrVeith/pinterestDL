@@ -2,6 +2,7 @@
 import signal
 
 import argparse
+import logging
 
 from pinterest_downloader import *
 
@@ -14,7 +15,7 @@ def handle_sig_int(signal, frame):
     :param frame: The stack frame in which the signal was received.
     :return None.
     """
-    print("Aborted, download may be incomplete.")
+    logging.warning("Aborted, download may be incomplete.")
     sys.exit(0)
 
 
@@ -44,8 +45,12 @@ def parse_cmd():
                         help="""Pick how the resolution limit is treated:
                              'individual': Both image dimensions must be bigger than the given resolution.
                              'area': The area of the image must be bigger than the provided resolution.""")
-    parser.add_argument("-s" "--skip-limit", default=float("inf"), type=int, required=False, dest="skip_limit",
+    parser.add_argument("-s", "--skip-limit", default=float("inf"), type=int, required=False, dest="skip_limit",
                         help="""Abort the download after so many pins have been skipped. A pin is skipped if it was already present in the download folder.""")
+    parser.add_argument("-t", "--timeout", default=15, type=int, required=False, dest="timeout",
+                        help="Set the timeout after which loading a pinterest board will be aborted, if unsuccessfull.")
+    parser.add_argument("-v", "--verbose", default=False, action="store_true", dest="verbose", required=False,
+                        help="Display more detailed output and progress reports.")
     args = parser.parse_args()
 
     return args
@@ -54,6 +59,10 @@ def parse_cmd():
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_sig_int)
     arguments = parse_cmd()
+    log_level = logging.INFO
+    if arguments.verbose:
+        log_level = logging.DEBUG
+    logging.basicConfig(level=log_level, format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%I:%M:%S')
 
     with PinterestDownloader(num_threads=arguments.nr_threads,
                             min_resolution=arguments.min_resolution,
