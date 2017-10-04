@@ -194,7 +194,7 @@ class Downloader(object):
                     status_report["downloaded"] == False
                     status_report["reason"] == "err_size"
             except urllib.request.ContentTooShortError:
-                print(f"Connection died during download of Pin {title}.")
+                logging.warning(f"Connection died during download of Pin {title}.")
                 status_report["downloaded"] = False
                 status_report["reason"] = "err_timeout"
 
