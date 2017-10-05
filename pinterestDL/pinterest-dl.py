@@ -1,5 +1,9 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 import signal
+import sys
+
+if sys.version_info < (3,6):
+    raise RuntimeError("Please call this script with python 3.6 or newer!")
 
 import argparse
 import logging
