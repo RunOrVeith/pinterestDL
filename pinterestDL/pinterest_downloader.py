@@ -293,7 +293,8 @@ class PinterestDownloader(object):
                     logging.info(f"Stopped, no new pins found. Skipped {num_skipped} pins.")
                     break
 
-                logging.info(f"Completed {downloaded_this_time/num_pins}%")
+                status = f"{downloaded_this_time/num_pins}%" if num_pins != float("inf") else f"{downloaded_this_time} pins"
+                logging.info(f"Completed {status}.")
 
                 future_to_url = {}
                 for high_res_link in url_cache:
