@@ -104,13 +104,17 @@ def _get_size_verifier(min_x, min_y, mode):
     :param min_y: Minimal y-coordinate length of image.
     :param mode: If equal to 'area': Only filter images whose area is below min_x*min_y.
                  If equal to 'individual' or anything else: Both sides of the image must be bigger than the
-                 given x and y coordinates.
+                 given x and y coordinates. Automatically compares long to long and short to short side.
     :returns function that decides wether an image should be kept or discarded according to the size constraints.
     """
     def by_area(width, height):
         return width * height >= min_x*min_y
     def by_both(width, height):
-        return width >= min_x and height >= min_y
+        long_side = max(width, height)
+        short_side = min(width, height)
+        long_given = max(min_x, min_y)
+        short_given = min(min_x, min_y)
+        return long_given <= long_side and short_given <= short_side
     def anything_goes(width, height):
         return True
     if mode == "area":
