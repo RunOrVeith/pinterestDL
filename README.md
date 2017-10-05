@@ -44,14 +44,15 @@ Tested on Ubuntu 16.04 LTS.
 - Clone the git repository and switch to it:
 
   ```
-  git clone **isnert link here**
+  git clone https://github.com/RunOrVeith/pinterestDL
   cd pinterestDL
   ```
 
 - Install the python requirements:
 
     ```
-    pip3 install -r requirements.txt```
+    pip3 install -r requirements.txt
+    ```
 
 - Optional: Create a symlink to the download script (if you don't do this, just replace the script name with the full path to the script):
 
