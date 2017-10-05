@@ -342,7 +342,7 @@ class PinterestDownloader(object):
             The scroll bar is disabled if we scrolled to the bottom and no new content has been loaded yet.
         :returns the new HTML body of the document including the newly loaded pins.
         """
-        scroll_js = "let height = document.body.scrollHeight; window.scrollTo(0, height);"
+        scroll_js = "var height = document.body.scrollHeight; window.scrollTo(0, height);"
         for _ in range(times):
             self.browser.execute_script(scroll_js)
             sleep(sleep_time)
