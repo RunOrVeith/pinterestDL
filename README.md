@@ -1,6 +1,6 @@
 # PinterestDL: Easily download Pinterest boards and tag pages
 
-This python script allows you to download pinterest pages, filtered by size of the images, and many more options.
+This python script allows you to download pinterest pages in a fast way, filtered by size of the images, and many more options.
 
 ## Installation
 Tested on Ubuntu 16.04 LTS.
