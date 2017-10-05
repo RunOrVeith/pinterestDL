@@ -1,11 +1,138 @@
-# PinterestDL: Easily download pinterest boards and tag pages
+# PinterestDL: Easily download Pinterest boards and tag pages
 
-## Installation instructions
-Tested on Ubuntu 16.04 LTS, probably works for other Linux-based distributions as well.
-Might also work on Windows and OS X.
+This python script allows you to download pinterest pages, filtered by size of the images, and many more options.
+
+## Installation
+Tested on Ubuntu 16.04 LTS.
 
 ### Requirements
+1. Python >= 3.6
 
-## Functionality instructions
+### Instructions
+
+- Recommended is a new python3.6 environment:
+
+  ```
+  python3 -m venv ./pinDL_venv
+  source ./pinDL_venv/bin/activate
+  ```
+
+- Install [PhantomJS](http://phantomjs.org/download.html):
+  1. Download the binary:
+
+    ```
+    wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
+    ```
+
+  2. Install the requirements:
+
+    ```sh
+    sudo apt-get install build-essential chrpath libssl-dev libxft-dev libfreetype6-dev libfreetype6 libfontconfig1-dev libfontconfig1 -y
+    ```
+
+  3. Extract the binary:
+
+    ```
+    sudo tar xvjf phantomjs-2.1.1-linux-x86_64.tar.bz2 -C /usr/local/share/
+    ```
+
+  4. Symlink the binary so it is visible on $PATH, e.g.:
+
+    ```
+    sudo ln -s /usr/local/share/phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/local/bin/
+    ```
+- Clone the git repository and switch to it:
+
+  ```
+  git clone **isnert link here**
+  cd pinterestDL
+  ```
+
+- Install the python requirements:
+
+    ```
+    pip3 install -r requirements.txt```
+
+- Optional: Create a symlink to the download script (if you don't do this, just replace the script name with the full path to the script):
+
+  ```
+  sudo ln -s `pwd`/pinterestDL/pinterest-dl.py /usr/local/bin/pinterest-dl
+  ```
+
+## Usage
+
+The package pinterestDL contains a command line tool, with which you can download pins from pinterest pages, i.e. boards or search results (tag pages).
+
+1. Go to the page you want to download in your favorite browser and copy the link.
+2. Call the script (the quotes are important, if you do not put them the shell will interpret the link as a path)
+
+  ```pinterest-dl "paste your link here" $HOME/Pictures```
+
+### Command line options
+
+Call ```pinterest-dl -h``` to see these instructions.
+
+    usage: pinterest-dl [-h] [-n BOARD_NAME] [-c NUM_PINS] [-j NR_THREADS]
+                        [-r MIN_RESOLUTION] [-m {individual,area}] [-s SKIP_LIMIT]
+                        [-t TIMEOUT] [-v]
+                        link dest_folder
+
+    Download a pinterest board or tag page. When downloading a tag page, and no
+    maximal number of downloads is provided, stop the script with CTRL+C.
+
+    positional arguments:
+      link                  Link to the pinterest page you want to download.
+      dest_folder           Folder into which the board will be downloaded. Folder
+                            with board name is automatically created or found
+                            inside this folder, if it already exists. If this
+                            folder is named like the page to be downloaded,
+                            everything will be directly in this folder.
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -n BOARD_NAME, --name BOARD_NAME
+                            The name for the downloaded page. If not given, will
+                            try to extract board name from pinterest. This will
+                            also be the name for the folder in which the images
+                            are stored.
+      -c NUM_PINS, --count NUM_PINS
+                            Download only the first 'num_pins' pins found on the
+                            page. If bigger than the number of pins on the board,
+                            all pins in the board will be downloaded. The default
+                            is to download all pins. If you do not specifiy this
+                            option on a tag page, where there are more or less
+                            infinite pins, just stop the script with CTRL+C.
+      -j NR_THREADS, --threads NR_THREADS
+                            Number of threads that download images in parallel.
+                            Defaults to 4.
+      -r MIN_RESOLUTION, --resolution MIN_RESOLUTION
+                            Minimal resolution for a download image. Input as
+                            'WIDTHxHEIGHT'.
+      -m {individual,area}, --mode {individual,area}
+                            Pick how the resolution limit is treated:
+                            'individual': Both image dimensions must be bigger
+                            than the given resolution, i.e x >= WIDTH and y >=
+                            HEIGHT. 'area': The area of the image must be bigger
+                            than the provided resolution, i.e. x*y >= WIDTH *
+                            HEIGHT.
+      -s SKIP_LIMIT, --skip-limit SKIP_LIMIT
+                            Abort the download after so many pins have been
+                            skipped. A pin is skipped if it was already present in
+                            the download folder. This way you can download new
+                            pins that have been added after your last download.
+                            Defaults to infinite. You should not set this to 1,
+                            but rather something like 10, because the page is not
+                            scraped exactly in the same order as the pins are
+                            added.
+      -t TIMEOUT, --timeout TIMEOUT
+                            Set the timeout in seconds after which loading a
+                            pinterest board will be aborted, if unsuccessfull.
+                            Defaults to 15 seconds.
+      -v, --verbose         Display more detailed output and progress reports.
+
 
 ## Fair Use Information
+
+Please respect the rights of the image right holders that you download. Also read Pinterest's [Terms of Service](https://policy.pinterest.com/en/terms-of-service), especially the [copy-right part](https://policy.pinterest.com/en/copyright).
+
+The creator of this script takes no responsibility for misuse by any user.
