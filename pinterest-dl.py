@@ -2,13 +2,13 @@
 import signal
 import sys
 
-if sys.version_info < (3,6):
+if sys.version_info < (3, 6):
     raise RuntimeError("Please call this script with python 3.6 or newer!")
 
 import argparse
 import logging
 
-from pinterest_downloader import *
+from pinterestDL.pinterest_downloader import PinterestDownloader
 
 
 def handle_sig_int(signal, frame):
@@ -51,7 +51,8 @@ def parse_cmd():
                         help="Number of threads that download images in parallel. Defaults to 4.")
     parser.add_argument("-r", "--resolution", default="0x0", required=False, dest="min_resolution",
                         help="""Minimal resolution for a download image. Input as 'WIDTHxHEIGHT'.""")
-    parser.add_argument("-m", "--mode", default="individual", required=False, choices=["individual", "area"], dest="mode",
+    parser.add_argument("-m", "--mode", default="individual", required=False, choices=["individual", "area"],
+                        dest="mode",
                         help="""Pick how the resolution limit is treated:
                              'individual': Both image dimensions must be bigger than the given resolution, i.e x >= WIDTH and y >= HEIGHT.
                              'area': The area of the image must be bigger than the provided resolution, i.e. x*y >= WIDTH * HEIGHT.""")
@@ -78,9 +79,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=log_level, format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%I:%M:%S')
 
     with PinterestDownloader(page_timeout=arguments.timeout,
-                            num_threads=arguments.nr_threads,
-                            min_resolution=arguments.min_resolution,
-                            size_compare_mode=arguments.mode) as dl:
+                             num_threads=arguments.nr_threads,
+                             min_resolution=arguments.min_resolution,
+                             size_compare_mode=arguments.mode) as dl:
         dl.download_board(board_url=arguments.link, download_folder=arguments.dest_folder,
-                      num_pins=arguments.num_pins, board_name=arguments.board_name,
-                      skip_tolerance=arguments.skip_limit)
+                          num_pins=arguments.num_pins, board_name=arguments.board_name,
+                          skip_tolerance=arguments.skip_limit)
