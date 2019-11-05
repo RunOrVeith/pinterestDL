@@ -1,9 +1,12 @@
 # PinterestDL: Easily download Pinterest boards and tag pages
 
 This python script allows you to download pinterest pages in a fast way, filtered by size of the images, and many more options.
+**Warning**: Some functionality currently does not behave as expected.
+The website scraping should be re-written, but I currently don't have time for this.
+Feel free to send a pull request.
 
 ## Installation
-Tested on Ubuntu 16.04 LTS.
+Tested on Ubuntu 18.04 LTS.
 
 ### Requirements
 1. Python >= 3.6
@@ -17,30 +20,6 @@ Tested on Ubuntu 16.04 LTS.
   source ./pinDL_venv/bin/activate
   ```
 
-- Install [PhantomJS](http://phantomjs.org/download.html):
-  1. Download the binary:
-
-    ```
-    wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
-    ```
-
-  2. Install the requirements:
-
-    ```sh
-    sudo apt-get install build-essential chrpath libssl-dev libxft-dev libfreetype6-dev libfreetype6 libfontconfig1-dev libfontconfig1 -y
-    ```
-
-  3. Extract the binary:
-
-    ```
-    sudo tar xvjf phantomjs-2.1.1-linux-x86_64.tar.bz2 -C /usr/local/share/
-    ```
-
-  4. Symlink the binary so it is visible on $PATH, e.g.:
-
-    ```
-    sudo ln -s /usr/local/share/phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/local/bin/
-    ```
 - Clone the git repository and switch to it:
 
   ```
@@ -53,6 +32,13 @@ Tested on Ubuntu 16.04 LTS.
     ```
     pip3 install -r requirements.txt
     ```
+
+- Install geckodriver (The geckodriver needs to be found in your path, if you already have it you can skip this).
+  This script will install the latest releast to `/usr/bin/geckodriver`:
+
+   ```
+   $SHELL /scripts/download_gecko_driver_linux.sh
+   ```
 
 - Optional: Create a symlink to the download script (if you don't do this, just replace the script name with the full path to the script):
 
@@ -68,6 +54,10 @@ The package pinterestDL contains a command line tool, with which you can downloa
 2. Call the script (the quotes are important, if you do not put them the shell will interpret the link as a path)
 
   ```pinterest-dl "paste your link here" $HOME/Pictures```
+
+**Warning**: Currently the option to automatically extract the number of pins in a board is broken.
+Specify the number of pins to download with `-c` or just stop the script.
+There will be more pins downloaded than the board is big.
 
 ### Command line options
 
