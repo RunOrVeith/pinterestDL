@@ -3,19 +3,20 @@
 import concurrent.futures
 from datetime import datetime
 import os
-from shutil import which
-import sys
 from time import sleep
 
 from bs4 import BeautifulSoup
 import logging
 from PIL import Image
 from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
 import urllib.request
 
-from memory_set import MemorySet
+from pinterestDL.memory_set import MemorySet
 
 """Use this script to download pinterest pages or boards. Requires python >= 3.6 and selenium chrome driver in $PATH."""
+
+logger = logging.getLogger(__name__)
 
 
 def find_num_pins(body):
@@ -23,14 +24,15 @@ def find_num_pins(body):
     :param body: the HTML body of a pinterest page.
     :returns the number of pins in the pinterest board, or infinity if a tag page was given.
     """
+
     spans = body.find_elements_by_tag_name("span")
     num_elements = float("inf")  # If we download from a tag page, return as many as possible
-    for span in spans:
+    for i, span in enumerate(spans):
         if "Pins" in span.text:
             num_elements = int(span.text.split(" ")[0])
             break
 
-    logging.debug(f"Found the provided page to contain {num_elements} pins.")
+    logger.debug(f"Found the provided page to contain {num_elements} pins.")
     return num_elements
 
 
@@ -52,7 +54,7 @@ def find_board_name(board_url):
             name_idx = -2
         board_name = board_url.split("/")[name_idx]
 
-    logging.debug(f"Found the provided page to have name {board_name}.")
+    logger.debug(f"Found the provided page to have name {board_name}.")
     return board_name
 
 
@@ -107,16 +109,20 @@ def _get_size_verifier(min_x, min_y, mode):
                  given x and y coordinates. Automatically compares long to long and short to short side.
     :returns function that decides wether an image should be kept or discarded according to the size constraints.
     """
+
     def by_area(width, height):
-        return width * height >= min_x*min_y
+        return width * height >= min_x * min_y
+
     def by_both(width, height):
         long_side = max(width, height)
         short_side = min(width, height)
         long_given = max(min_x, min_y)
         short_given = min(min_x, min_y)
         return long_given <= long_side and short_given <= short_side
+
     def anything_goes(width, height):
         return True
+
     if mode == "area":
         return by_area
     elif mode == "individual":
@@ -140,9 +146,9 @@ def _handle_download_report(future, url):
         downloaded = False
 
         if reason == "err_timeout":
-            logging.warning(f"Could not download {url}: {reason}")
+            logger.warning(f"Could not download {url}: {reason}")
         else:
-            logging.debug(f"Could not download {url}: {reason}")
+            logger.debug(f"Could not download {url}: {reason}")
 
     return downloaded
 
@@ -183,6 +189,7 @@ class Downloader(object):
 
         # Check if the image is already present in the folder from previous runs of the script
         if title in self.previously_downloaded:
+            logger.info(f"Skipping {title}, already downloaded")
             status_report["downloaded"] = False
             status_report["reason"] = "err_present"
         else:
@@ -195,10 +202,10 @@ class Downloader(object):
                 # If the image was smaller then we want, we delete it again
                 if not self.verify_size(width, height):
                     os.remove(destination)
-                    status_report["downloaded"] == False
-                    status_report["reason"] == "err_size"
+                    status_report["downloaded"] = False
+                    status_report["reason"] = "err_size"
             except urllib.request.ContentTooShortError:
-                logging.warning(f"Connection died during download of Pin {title}.")
+                logger.warning(f"Connection died during download of Pin {title}.")
                 status_report["downloaded"] = False
                 status_report["reason"] = "err_timeout"
 
@@ -208,7 +215,7 @@ class Downloader(object):
 class PinterestDownloader(object):
 
     def __init__(self, page_timeout=10, num_threads=4,
-                 min_resolution="0x0",size_compare_mode=None):
+                 min_resolution="0x0", size_compare_mode=None):
         """
         Downloader for pinterest boards or tag pages.
         This will open a selenium instance for scrolling.
@@ -220,27 +227,20 @@ class PinterestDownloader(object):
                One of 'area' or 'individual'.
         """
         self.browser = None
-        self.browser_type = "phantomjs"  # Only support phantomjs for now, but can easily be extended
         self.page_timeout = page_timeout
         self.num_threads = num_threads
         # Pick a minimal image resolution
         min_x, min_y = [int(r) for r in min_resolution.split("x")]
         self.size_verifier = _get_size_verifier(min_x, min_y, size_compare_mode)
+        self._webdriver = webdriver.Firefox
 
     def __enter__(self):
         """
         Use this class with a with-statement as it needs to open a selenium instance.
         """
-        if "phantomjs" == self.browser_type.lower():
-            if which("phantomjs") is None:
-                raise EnvironmentError("""No executable for PhantomJS found. Please install PhantomJS and make sure it's visible on the system.""")
-            self.browser = webdriver.PhantomJS()
-            # Set a fake window size for phantomJS, see https://github.com/ariya/phantomjs/issues/11637
-            self.browser.set_window_size(1120, 550)
-        else:
-            raise ValueError("Unsupported browser type. Only phantomjs is supported right now.")
-
-        self.browser.set_page_load_timeout(self.page_timeout)
+        options = Options()
+        options.add_argument("--headless")
+        self.browser = self._webdriver(options=options)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -248,14 +248,13 @@ class PinterestDownloader(object):
         Close the selenium instance.
         """
         self.browser.close()
-        if os.path.isfile("ghostdriver.log"):
-            # Remove the log from phantomJS
-            logging.debug("Removing ghostdriver.log (PhantomJS log).")
-            os.remove("ghostdriver.log")
+        if os.path.isfile("geckodriver.log"):
+            logger.debug("Removing geckodriver.log")
+            os.remove("geckodriver.log")
 
     def download_board(self, board_url, download_folder,
-                   board_name=None, num_pins=None,
-                   skip_tolerance=float('inf')):
+                       board_name=None, num_pins=None,
+                       skip_tolerance=float('inf')):
         """
         Download a specific pinterest page.
         :param board_url: The url to the pinterest board. Also works with tag pages.
@@ -278,8 +277,8 @@ class PinterestDownloader(object):
                                                                    board_url=board_url,
                                                                    num_pins=num_pins,
                                                                    body=body)
+        logger.info(f"Found board '{board_name}' with {num_pins} pins")
 
-        num_srcs = 0
         num_skipped = 0
         downloaded_this_time = 0
         url_cache = MemorySet()
@@ -287,18 +286,20 @@ class PinterestDownloader(object):
 
         # Extract sources of images and download the found ones in parallel
         with concurrent.futures.ThreadPoolExecutor(self.num_threads) as consumers:
-            logging.info("Starting download...")
+            logger.info("Starting download...")
 
             while downloaded_this_time < num_pins and num_skipped < skip_tolerance:
 
                 high_res_srcs, new_num_srcs = find_high_res_links(body)
                 retrieved_new_urls = url_cache.update(high_res_srcs)
                 if not retrieved_new_urls:
-                    logging.info(f"Stopped, no new pins found. Skipped {num_skipped} pins.")
+                    logger.info(f"Stopped, no new pins found. Skipped {num_skipped} pins.")
                     break
 
-                status = f"{downloaded_this_time/num_pins}%" if num_pins != float("inf") else f"{downloaded_this_time} pins"
-                logging.info(f"Completed {status}.")
+                if downloaded_this_time > 0:
+                    status = f"{downloaded_this_time / num_pins}%" if num_pins != float(
+                        "inf") else f"{downloaded_this_time} pins"
+                    logger.info(f"Completed {status}.")
 
                 future_to_url = {}
                 for high_res_link in url_cache:
@@ -319,12 +320,13 @@ class PinterestDownloader(object):
                 # Pinterest loads further images with JS, so selenium needs to scroll down to load more images
                 num_srcs = new_num_srcs
                 if num_srcs < num_pins:
-                    logging.debug("Need to scroll down because {num_srcs} < {num_pins}")
-                    body =  self.scroll_down_for_new_body(times=7)
+                    logger.debug(f"Need to scroll down because {num_srcs} < {num_pins}")
+                    body = self.scroll_down_for_new_body(times=7)
 
         if num_skipped >= skip_tolerance:
-            logging.debug("Skip limit reached. Stopping.")
-        logging.info(f"""Downloaded {downloaded_this_time} pins to {download_folder}. Skipped {num_skipped} pins. Finished.""")
+            logger.debug("Skip limit reached. Stopping.")
+        logger.info(
+            f"""Downloaded {downloaded_this_time} pins to {download_folder}. Skipped {num_skipped} pins. Finished.""")
 
     def update_body_html(self):
         """

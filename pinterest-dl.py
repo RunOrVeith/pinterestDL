@@ -2,13 +2,14 @@
 import signal
 import sys
 
-if sys.version_info < (3, 6):
-    raise RuntimeError("Please call this script with python 3.6 or newer!")
-
 import argparse
 import logging
 
 from pinterestDL.pinterest_downloader import PinterestDownloader
+
+
+if sys.version_info < (3, 6):
+    raise RuntimeError("Please call this script with python 3.6 or newer!")
 
 
 def handle_sig_int(signal, frame):
